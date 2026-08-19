@@ -1,0 +1,20 @@
+[project]
+name = "vaultctl"
+version = "0.1.0"
+description = "CLI, разворачивающий CLI-агента для задач над Obsidian vault через навык obsidian"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.scripts]
+vaultctl = "vaultctl.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["vaultctl*"]
