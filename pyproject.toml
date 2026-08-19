@@ -5,11 +5,12 @@ description = "CLI, разворачивающий CLI-агента для за�
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
+dependencies = ["python-dotenv>=1.0"]
 
 [project.scripts]
 vaultctl = "vaultctl.cli:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = ["pytest>=8"]
 
 [build-system]

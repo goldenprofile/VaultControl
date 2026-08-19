@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
-from .config import VaultNotFoundError, resolve_vault_path
+from .config import VaultNotFoundError, load_env, resolve_vault_path
 from .runner import run_task
 
 
@@ -26,6 +27,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--agent-cmd",
         help="Команда запуска CLI-агента (по умолчанию: 'claude -p' или VAULTCTL_AGENT_CMD)",
     )
+    parser.add_argument(
+        "--env-file",
+        help="Путь к .env (по умолчанию ищется от текущей директории вверх по дереву)",
+    )
     return parser
 
 
@@ -35,8 +40,9 @@ def main(argv: list[str] | None = None) -> int:
     task = " ".join(args.task)
 
     try:
+        load_env(Path(args.env_file) if args.env_file else None)
         vault_path = resolve_vault_path()
-    except VaultNotFoundError as exc:
+    except (FileNotFoundError, VaultNotFoundError) as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
         return 1
 
