@@ -74,10 +74,16 @@ cp .env.example .env
 uv run vaultctl "сохрани ссылку https://example.com/post"
 ```
 
+Есть короткий алиас `vlt` — та же самая команда:
+
+```bash
+uv run vlt "сохрани ссылку https://example.com/post"
+```
+
 Кавычки необязательны — все позиционные аргументы склеиваются в одну задачу:
 
 ```bash
-uv run vaultctl Сделай бриф по проекту NameRegister
+uv run vlt Сделай бриф по проекту NameRegister
 ```
 
 ### Переменные окружения

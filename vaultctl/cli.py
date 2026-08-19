@@ -16,7 +16,8 @@ EXIT_AGENT_NOT_FOUND = 127
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="vaultctl",
+        # prog не задаём: argparse возьмёт фактическое имя вызова —
+        # `vaultctl` или короткий алиас `vlt`.
         description=(
             "vaultctl — CLI, передающий задачи над Obsidian vault "
             "CLI-агенту с установленным навыком obsidian."

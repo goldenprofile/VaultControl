@@ -9,6 +9,7 @@ dependencies = ["python-dotenv>=1.0"]
 
 [project.scripts]
 vaultctl = "vaultctl.cli:main"
+vlt = "vaultctl.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]
