@@ -2,7 +2,12 @@ import os
 
 import pytest
 
-from vaultctl.config import VaultNotFoundError, load_env, resolve_vault_path
+from vaultctl.config import (
+    VaultNotFoundError,
+    load_env,
+    resolve_timeout,
+    resolve_vault_path,
+)
 
 
 def test_resolve_vault_path_from_env(tmp_path, monkeypatch):
@@ -63,3 +68,30 @@ def test_load_env_explicit_path(tmp_path, monkeypatch):
 def test_load_env_explicit_path_missing(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_env(tmp_path / "absent.env")
+
+
+def test_resolve_timeout_absent_means_no_limit(monkeypatch):
+    monkeypatch.delenv("VAULTCTL_TIMEOUT", raising=False)
+    assert resolve_timeout() is None
+
+
+def test_resolve_timeout_from_env(monkeypatch):
+    monkeypatch.setenv("VAULTCTL_TIMEOUT", "600")
+    assert resolve_timeout() == 600.0
+
+
+def test_resolve_timeout_argument_beats_env(monkeypatch):
+    monkeypatch.setenv("VAULTCTL_TIMEOUT", "600")
+    assert resolve_timeout("30") == 30.0
+
+
+def test_resolve_timeout_blank_env_means_no_limit(monkeypatch):
+    monkeypatch.setenv("VAULTCTL_TIMEOUT", "   ")
+    assert resolve_timeout() is None
+
+
+@pytest.mark.parametrize("value", ["скоро", "0", "-5"])
+def test_resolve_timeout_rejects_bad_values(value, monkeypatch):
+    monkeypatch.delenv("VAULTCTL_TIMEOUT", raising=False)
+    with pytest.raises(ValueError):
+        resolve_timeout(value)

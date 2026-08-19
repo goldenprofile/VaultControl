@@ -35,6 +35,27 @@ def load_env(env_file: Path | None = None) -> Path | None:
     return Path(found)
 
 
+def resolve_timeout(raw: str | None = None) -> float | None:
+    """Определяет таймаут на работу агента в секундах.
+
+    Порядок: аргумент (``--timeout``), затем ``VAULTCTL_TIMEOUT``. Пустое
+    значение и отсутствие обоих означают работу без ограничения по времени.
+    """
+    value = raw if raw is not None else os.environ.get("VAULTCTL_TIMEOUT")
+    if value is None or not value.strip():
+        return None
+
+    try:
+        seconds = float(value)
+    except ValueError:
+        raise ValueError(
+            f"таймаут должен быть числом секунд, получено: {value!r}"
+        ) from None
+    if seconds <= 0:
+        raise ValueError(f"таймаут должен быть больше нуля, получено: {seconds}")
+    return seconds
+
+
 def resolve_vault_path(start: Path | None = None) -> Path:
     """Определяет путь к Obsidian vault.
 
