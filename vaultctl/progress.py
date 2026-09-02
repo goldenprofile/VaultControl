@@ -29,6 +29,9 @@ TOOL_ARG_KEYS = (
     "query",
     "prompt",
     "description",
+    # Имя навыка: строка `Skill(obsidian)` показывает, что агент подхватил
+    # навык, — ради этого vaultctl и запускается.
+    "skill",
 )
 
 MAX_ARG_LEN = 70

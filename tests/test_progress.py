@@ -99,6 +99,21 @@ def test_renderer_shows_tool_calls():
     assert "WebFetch(u)" in output
 
 
+def test_renderer_names_the_skill_the_agent_picked_up():
+    output = render(
+        {
+            "type": "assistant",
+            "message": {
+                "content": [
+                    {"type": "tool_use", "name": "Skill", "input": {"skill": "obsidian"}}
+                ]
+            },
+        }
+    )
+
+    assert "Skill(obsidian)" in output
+
+
 def test_renderer_shortens_paths_inside_vault(tmp_path: Path):
     target = tmp_path / "inbox" / "note.md"
     output = render(
