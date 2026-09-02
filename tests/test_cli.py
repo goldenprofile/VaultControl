@@ -3,6 +3,7 @@ import sys
 
 import pytest
 
+from vaultctl import runner
 from vaultctl.cli import EXIT_CONFIG_ERROR, main
 
 POST = "Нейродайджест (#128)\n\n- GLM 5.3 Flash — $0,15/$0,5 за миллион токенов."
@@ -15,6 +16,7 @@ def vault(tmp_path, monkeypatch):
     path.mkdir()
     monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(path))
     monkeypatch.delenv("VAULTCTL_AGENT_CMD", raising=False)
+    monkeypatch.delenv("VAULTCTL_AGENT_INPUT", raising=False)
     return path
 
 
@@ -25,7 +27,11 @@ def agent(tmp_path):
     script = tmp_path / "agent.py"
     script.write_text(
         "import sys, pathlib\n"
-        "pathlib.Path(sys.argv[1]).write_text(sys.argv[2], encoding='utf-8')\n",
+        "task = (\n"
+        "    sys.argv[2] if len(sys.argv) > 2\n"
+        "    else sys.stdin.buffer.read().decode('utf-8')\n"
+        ")\n"
+        "pathlib.Path(sys.argv[1]).write_text(task, encoding='utf-8')\n",
         encoding="utf-8",
     )
     command = " ".join(f'"{part}"' for part in (sys.executable, script, out))
@@ -69,6 +75,16 @@ def test_main_reads_task_from_pipe(vault, agent, monkeypatch):
     assert out.read_text(encoding="utf-8") == f"clip:\n\n{POST}"
 
 
+def test_main_sends_long_task_through_stdin(vault, agent, monkeypatch):
+    command, out = agent
+    monkeypatch.setattr(sys, "stdin", io.StringIO("x" * (runner.arg_limit() + 1)))
+
+    code = main(["--agent-cmd", command, "clip:"])
+
+    assert code == 0
+    assert out.read_text(encoding="utf-8").endswith("x" * 100)
+
+
 def test_main_reports_empty_task(vault, agent, monkeypatch):
     command, _ = agent
     monkeypatch.setattr(sys, "stdin", io.StringIO("   "))
@@ -87,10 +103,23 @@ def test_main_rejects_conflicting_sources(vault, agent, tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stderr", stderr)
     monkeypatch.setattr(sys, "stdin", FakeTty())
 
-    code = main(["--agent-cmd", command, "--clipboard", "--file", str(tmp_path)])
+    code = main(
+        ["--agent-cmd", command, "--clipboard", "--file", str(tmp_path)]
+    )
 
     assert code == EXIT_CONFIG_ERROR
     assert "взаимоисключающие" in stderr.getvalue()
+
+
+def test_main_honours_agent_input_from_env(vault, agent, monkeypatch):
+    command, out = agent
+    monkeypatch.setenv("VAULTCTL_AGENT_INPUT", "stdin")
+    monkeypatch.setattr(sys, "stdin", FakeTty())
+
+    code = main(["--agent-cmd", command, "задача"])
+
+    assert code == 0
+    assert out.read_text(encoding="utf-8") == "задача"
 
 
 def test_main_reports_unknown_vault(tmp_path, monkeypatch):

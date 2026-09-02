@@ -2,11 +2,13 @@ import sys
 
 import pytest
 
+from vaultctl import runner
 from vaultctl.runner import (
     DEFAULT_AGENT_CMD,
     AgentNotFoundError,
     AgentTimeoutError,
     build_command,
+    resolve_agent_input,
     run_task,
 )
 
@@ -65,7 +67,9 @@ def test_run_task_runs_agent_in_vault_with_env(tmp_path):
         encoding="utf-8",
     )
 
-    code = run_task("сохрани ссылку", vault, quoted(sys.executable, script, out))
+    code = run_task(
+        "сохрани ссылку", vault, quoted(sys.executable, script, out)
+    )
 
     cwd, env_vault, task = out.read_text(encoding="utf-8").splitlines()
     assert code == 0
@@ -98,3 +102,51 @@ def test_run_task_timeout_raises(tmp_path):
 
     with pytest.raises(AgentTimeoutError):
         run_task("задача", vault, quoted(sys.executable, script), timeout=1)
+
+
+def test_resolve_agent_input_defaults_to_argument():
+    assert resolve_agent_input("auto", ["claude", "-p"], "короткая задача") == "arg"
+
+
+def test_resolve_agent_input_switches_to_stdin_on_long_task():
+    task = "x" * (runner.arg_limit() + 1)
+    assert resolve_agent_input("auto", ["claude", "-p"], task) == "stdin"
+
+
+def test_resolve_agent_input_respects_explicit_mode():
+    long_task = "x" * (runner.arg_limit() + 1)
+    assert resolve_agent_input("arg", ["claude", "-p"], long_task) == "arg"
+    assert resolve_agent_input("stdin", ["claude", "-p"], "коротко") == "stdin"
+
+
+def test_resolve_agent_input_rejects_unknown_mode():
+    with pytest.raises(ValueError, match="неизвестный способ"):
+        resolve_agent_input("gui", ["claude", "-p"], "задача")
+
+
+def test_run_task_can_send_task_through_stdin(tmp_path):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    out = tmp_path / "out.txt"
+    script = tmp_path / "agent.py"
+    script.write_text(
+        "import sys, pathlib\n"
+        "received = sys.stdin.buffer.read().decode('utf-8')\n"
+        "pathlib.Path(sys.argv[1]).write_text(\n"
+        "    received + '\\n---\\n' + ' '.join(sys.argv[2:]), encoding='utf-8'\n"
+        ")\n",
+        encoding="utf-8",
+    )
+    task = "clip:\n\nНейродайджест — $0,15/$0,5"
+
+    code = run_task(
+        task,
+        vault,
+        quoted(sys.executable, script, out),
+        agent_input="stdin",
+    )
+
+    received, extra = out.read_text(encoding="utf-8").split("\n---\n")
+    assert code == 0
+    assert received == task
+    assert extra == ""

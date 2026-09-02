@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 from .config import VaultNotFoundError, load_env, resolve_timeout, resolve_vault_path
-from .runner import AgentNotFoundError, AgentTimeoutError, run_task
+from .runner import (
+    AGENT_INPUT_MODES,
+    AgentNotFoundError,
+    AgentTimeoutError,
+    run_task,
+)
 from .taskinput import TaskInputError, resolve_task
 
 EXIT_CONFIG_ERROR = 1
@@ -59,6 +65,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Команда запуска CLI-агента (по умолчанию: 'claude -p' или VAULTCTL_AGENT_CMD)",
     )
     parser.add_argument(
+        "--agent-input",
+        choices=AGENT_INPUT_MODES,
+        help=(
+            "Как передать задачу агенту: arg — последним аргументом, "
+            "stdin — потоком, auto — по длине (по умолчанию, или VAULTCTL_AGENT_INPUT)"
+        ),
+    )
+    parser.add_argument(
         "--env-file",
         help="Путь к .env (по умолчанию ищется от текущей директории вверх по дереву)",
     )
@@ -95,8 +109,14 @@ def main(argv: list[str] | None = None) -> int:
         print("Отменено.", file=sys.stderr)
         return EXIT_CONFIG_ERROR
 
+    agent_input = args.agent_input or os.environ.get("VAULTCTL_AGENT_INPUT") or "auto"
     try:
-        return run_task(task, vault_path, args.agent_cmd, timeout)
+        return run_task(
+            task, vault_path, args.agent_cmd, timeout, agent_input=agent_input
+        )
+    except ValueError as exc:
+        print(f"Ошибка: {exc}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
     except AgentNotFoundError as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
         return EXIT_AGENT_NOT_FOUND
