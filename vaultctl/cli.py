@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .config import VaultNotFoundError, load_env, resolve_timeout, resolve_vault_path
 from .runner import AgentNotFoundError, AgentTimeoutError, run_task
+from .taskinput import TaskInputError, resolve_task
 
 EXIT_CONFIG_ERROR = 1
 EXIT_TIMEOUT = 124
@@ -23,15 +24,35 @@ def build_parser() -> argparse.ArgumentParser:
             "CLI-агенту с установленным навыком obsidian."
         ),
         epilog=(
-            "Текст задачи добавляется последним аргументом команды агента, "
-            "поэтому флаг со списком значений (например --allowedTools у Claude "
-            "Code) не должен стоять в конце --agent-cmd — он проглотит задачу."
+            "Длинный текст не передавайте аргументом: шелл ломает многострочную "
+            "вставку, а PowerShell раскрывает $0,15 в ,15. Используйте "
+            "--clipboard, --file или пайп."
         ),
     )
     parser.add_argument(
         "task",
-        nargs="+",
-        help="Текст задачи, например: сохрани ссылку https://example.com/post",
+        nargs="*",
+        help=(
+            "Текст задачи или инструкция к тексту из --clipboard/--file/stdin, "
+            "например: сохрани ссылку https://example.com/post"
+        ),
+    )
+    parser.add_argument(
+        "-c",
+        "--clipboard",
+        action="store_true",
+        help="Взять текст задачи из буфера обмена",
+    )
+    parser.add_argument(
+        "-f",
+        "--file",
+        dest="task_file",
+        help="Взять текст задачи из файла",
+    )
+    parser.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Взять текст задачи из stdin (при пайпе включается сам)",
     )
     parser.add_argument(
         "--agent-cmd",
@@ -51,7 +72,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    task = " ".join(args.task)
 
     try:
         load_env(Path(args.env_file) if args.env_file else None)
@@ -59,6 +79,20 @@ def main(argv: list[str] | None = None) -> int:
         vault_path = resolve_vault_path()
     except (FileNotFoundError, VaultNotFoundError, ValueError) as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+
+    try:
+        task = resolve_task(
+            args.task,
+            clipboard=args.clipboard,
+            task_file=Path(args.task_file) if args.task_file else None,
+            use_stdin=args.stdin,
+        )
+    except TaskInputError as exc:
+        print(f"Ошибка: {exc}", file=sys.stderr)
+        return EXIT_CONFIG_ERROR
+    except KeyboardInterrupt:
+        print("Отменено.", file=sys.stderr)
         return EXIT_CONFIG_ERROR
 
     try:
