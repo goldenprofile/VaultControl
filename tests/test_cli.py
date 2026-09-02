@@ -17,6 +17,7 @@ def vault(tmp_path, monkeypatch):
     monkeypatch.setenv("OBSIDIAN_VAULT_PATH", str(path))
     monkeypatch.delenv("VAULTCTL_AGENT_CMD", raising=False)
     monkeypatch.delenv("VAULTCTL_AGENT_INPUT", raising=False)
+    monkeypatch.delenv("VAULTCTL_STREAM", raising=False)
     return path
 
 
@@ -47,7 +48,7 @@ def test_main_passes_positional_task(vault, agent, monkeypatch):
     command, out = agent
     monkeypatch.setattr(sys, "stdin", FakeTty())
 
-    code = main(["--agent-cmd", command, "сохрани", "ссылку"])
+    code = main(["--quiet", "--agent-cmd", command, "сохрани", "ссылку"])
 
     assert code == 0
     assert out.read_text(encoding="utf-8") == "сохрани ссылку"
@@ -59,7 +60,7 @@ def test_main_reads_task_from_file(vault, agent, tmp_path, monkeypatch):
     source.write_text(POST, encoding="utf-8")
     monkeypatch.setattr(sys, "stdin", FakeTty())
 
-    code = main(["--agent-cmd", command, "--file", str(source), "clip:"])
+    code = main(["--quiet", "--agent-cmd", command, "--file", str(source), "clip:"])
 
     assert code == 0
     assert out.read_text(encoding="utf-8") == f"clip:\n\n{POST}"
@@ -69,7 +70,7 @@ def test_main_reads_task_from_pipe(vault, agent, monkeypatch):
     command, out = agent
     monkeypatch.setattr(sys, "stdin", io.StringIO(POST))
 
-    code = main(["--agent-cmd", command, "clip:"])
+    code = main(["--quiet", "--agent-cmd", command, "clip:"])
 
     assert code == 0
     assert out.read_text(encoding="utf-8") == f"clip:\n\n{POST}"
@@ -79,7 +80,7 @@ def test_main_sends_long_task_through_stdin(vault, agent, monkeypatch):
     command, out = agent
     monkeypatch.setattr(sys, "stdin", io.StringIO("x" * (runner.arg_limit() + 1)))
 
-    code = main(["--agent-cmd", command, "clip:"])
+    code = main(["--quiet", "--agent-cmd", command, "clip:"])
 
     assert code == 0
     assert out.read_text(encoding="utf-8").endswith("x" * 100)
@@ -91,7 +92,7 @@ def test_main_reports_empty_task(vault, agent, monkeypatch):
     stderr = io.StringIO()
     monkeypatch.setattr(sys, "stderr", stderr)
 
-    code = main(["--agent-cmd", command])
+    code = main(["--quiet", "--agent-cmd", command])
 
     assert code == EXIT_CONFIG_ERROR
     assert "пуста" in stderr.getvalue()
@@ -104,7 +105,7 @@ def test_main_rejects_conflicting_sources(vault, agent, tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdin", FakeTty())
 
     code = main(
-        ["--agent-cmd", command, "--clipboard", "--file", str(tmp_path)]
+        ["--quiet", "--agent-cmd", command, "--clipboard", "--file", str(tmp_path)]
     )
 
     assert code == EXIT_CONFIG_ERROR
@@ -116,7 +117,7 @@ def test_main_honours_agent_input_from_env(vault, agent, monkeypatch):
     monkeypatch.setenv("VAULTCTL_AGENT_INPUT", "stdin")
     monkeypatch.setattr(sys, "stdin", FakeTty())
 
-    code = main(["--agent-cmd", command, "задача"])
+    code = main(["--quiet", "--agent-cmd", command, "задача"])
 
     assert code == 0
     assert out.read_text(encoding="utf-8") == "задача"
@@ -127,5 +128,5 @@ def test_main_reports_unknown_vault(tmp_path, monkeypatch):
     stderr = io.StringIO()
     monkeypatch.setattr(sys, "stderr", stderr)
 
-    assert main(["задача"]) == EXIT_CONFIG_ERROR
+    assert main(["--quiet", "задача"]) == EXIT_CONFIG_ERROR
     assert "несуществующую" in stderr.getvalue()

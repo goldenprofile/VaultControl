@@ -8,17 +8,19 @@ import sys
 from pathlib import Path
 
 from .config import VaultNotFoundError, load_env, resolve_timeout, resolve_vault_path
-from .runner import (
-    AGENT_INPUT_MODES,
-    AgentNotFoundError,
-    AgentTimeoutError,
-    run_task,
-)
+from .runner import AGENT_INPUT_MODES, AgentNotFoundError, AgentTimeoutError, run_task
 from .taskinput import TaskInputError, resolve_task
 
 EXIT_CONFIG_ERROR = 1
 EXIT_TIMEOUT = 124
 EXIT_AGENT_NOT_FOUND = 127
+
+TRUTHY = {"1", "true", "yes", "on"}
+
+
+def env_flag(name: str) -> bool:
+    """Читает булеву переменную окружения."""
+    return os.environ.get(name, "").strip().lower() in TRUTHY
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -80,6 +82,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--timeout",
         help="Ограничение на работу агента в секундах (или VAULTCTL_TIMEOUT)",
     )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Показывать шаги агента по мере работы (Claude Code, или VAULTCTL_STREAM)",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Не печатать строки статуса перед запуском агента",
+    )
     return parser
 
 
@@ -112,7 +125,13 @@ def main(argv: list[str] | None = None) -> int:
     agent_input = args.agent_input or os.environ.get("VAULTCTL_AGENT_INPUT") or "auto"
     try:
         return run_task(
-            task, vault_path, args.agent_cmd, timeout, agent_input=agent_input
+            task,
+            vault_path,
+            args.agent_cmd,
+            timeout,
+            agent_input=agent_input,
+            stream=args.stream or env_flag("VAULTCTL_STREAM"),
+            quiet=args.quiet,
         )
     except ValueError as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
