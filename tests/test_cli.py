@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from vaultctl import runner
+from vaultctl import cli, runner
 from vaultctl.cli import EXIT_CONFIG_ERROR, main
 
 POST = "Нейродайджест (#128)\n\n- GLM 5.3 Flash — $0,15/$0,5 за миллион токенов."
@@ -130,3 +130,35 @@ def test_main_reports_unknown_vault(tmp_path, monkeypatch):
 
     assert main(["--quiet", "задача"]) == EXIT_CONFIG_ERROR
     assert "несуществующую" in stderr.getvalue()
+
+
+def test_main_flushes_terminal_input(vault, agent, monkeypatch):
+    """Хвост многострочной вставки не должен уйти в шелл командами."""
+    command, _ = agent
+    calls: list[str] = []
+    monkeypatch.setattr(cli, "flush_input", lambda *a: calls.append("flush") or True)
+    monkeypatch.setattr(sys, "stdin", FakeTty("задача"))
+
+    assert main(["--quiet", "--agent-cmd", command]) == 0
+    assert len(calls) == 2  # до запуска агента и после его завершения
+
+
+def test_main_keeps_terminal_input_on_demand(vault, agent, monkeypatch):
+    command, _ = agent
+    calls: list[str] = []
+    monkeypatch.setattr(cli, "flush_input", lambda *a: calls.append("flush") or True)
+    monkeypatch.setattr(sys, "stdin", FakeTty("задача"))
+
+    assert main(["--quiet", "--keep-input", "--agent-cmd", command]) == 0
+    assert calls == []
+
+
+def test_main_flushes_input_even_after_failure(vault, monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(cli, "flush_input", lambda *a: calls.append("flush") or True)
+    monkeypatch.setattr(sys, "stdin", FakeTty("задача"))
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+    main(["--quiet", "--agent-cmd", "vaultctl-no-such-agent-xyz"])
+
+    assert len(calls) == 2

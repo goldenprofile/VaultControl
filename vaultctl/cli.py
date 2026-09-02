@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .config import VaultNotFoundError, load_env, resolve_timeout, resolve_vault_path
+from .console import flush_input
 from .runner import AGENT_INPUT_MODES, AgentNotFoundError, AgentTimeoutError, run_task
 from .taskinput import TaskInputError, resolve_task
 
@@ -93,6 +94,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Не печатать строки статуса перед запуском агента",
     )
+    parser.add_argument(
+        "--keep-input",
+        action="store_true",
+        help=(
+            "Не очищать очередь ввода терминала — иначе хвост многострочной "
+            "вставки шелл выполнит как команды"
+        ),
+    )
     return parser
 
 
@@ -122,6 +131,12 @@ def main(argv: list[str] | None = None) -> int:
         print("Отменено.", file=sys.stderr)
         return EXIT_CONFIG_ERROR
 
+    # Задача собрана — всё, что осталось в очереди ввода, это хвост вставки,
+    # который шелл иначе выполнит как команды. Сбрасываем до запуска агента и
+    # ещё раз после: вставить текст могли и пока агент работал.
+    if not args.keep_input:
+        flush_input()
+
     agent_input = args.agent_input or os.environ.get("VAULTCTL_AGENT_INPUT") or "auto"
     try:
         return run_task(
@@ -142,6 +157,9 @@ def main(argv: list[str] | None = None) -> int:
     except AgentTimeoutError as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
         return EXIT_TIMEOUT
+    finally:
+        if not args.keep_input:
+            flush_input()
 
 
 if __name__ == "__main__":
