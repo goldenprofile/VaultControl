@@ -25,6 +25,7 @@ def env_flag(name: str) -> bool:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Собирает разбор аргументов CLI."""
     parser = argparse.ArgumentParser(
         # prog не задаём: argparse возьмёт фактическое имя вызова —
         # `vaultctl` или короткий алиас `vlt`.
@@ -106,6 +107,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Проходит запуск по шагам: конфигурация, текст задачи, агент.
+
+    Порядок неслучаен: сначала то, что может отказать дёшево (vault, таймаут,
+    источник текста), и только потом долгий запуск агента. Каждый класс отказа
+    получает свой код возврата, чтобы вызывающая сторона отличала нехватку
+    конфигурации от таймаута и отсутствующего агента.
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
 
