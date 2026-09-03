@@ -118,8 +118,11 @@ def _read_pipe(stream: IO[str]) -> str:
 
 
 def _interactive_hint() -> str:
-    end_key = "Ctrl+Z, Enter" if sys.platform == "win32" else "Ctrl+D"
-    return f"Текст задачи ({end_key} — запустить, Ctrl+C — отмена):"
+    end_key = "Ctrl+Z, затем Enter" if sys.platform == "win32" else "Ctrl+D"
+    return (
+        f"Текст задачи — многострочный, Enter строку не завершает. "
+        f"Конец ввода: {end_key}. Ctrl+C — отмена:"
+    )
 
 
 def prompt_interactive(stdin: IO[str], stderr: IO[str]) -> str:
