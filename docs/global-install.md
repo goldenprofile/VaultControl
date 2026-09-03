@@ -81,7 +81,7 @@ pipx install -e .
 ```powershell
 # PowerShell $PROFILE
 $env:OBSIDIAN_VAULT_PATH = "D:\Obsidian\MyVault"
-$env:VAULTCTL_AGENT_CMD  = "claude -p"
+$env:VAULTCTL_AGENT_CMD  = "pi -p"
 ```
 
 Или через меню «Переменные среды системы» (Windows):
@@ -89,7 +89,7 @@ $env:VAULTCTL_AGENT_CMD  = "claude -p"
 | Переменная             | Значение                          | Описание                           |
 |------------------------|-----------------------------------|------------------------------------|
 | `OBSIDIAN_VAULT_PATH`  | `D:\Obsidian\MyVault`             | Путь к Obsidian vault              |
-| `VAULTCTL_AGENT_CMD`   | `claude -p`                       | Команда запуска CLI-агента         |
+| `VAULTCTL_AGENT_CMD`   | `pi -p`                       | Команда запуска CLI-агента         |
 | `VAULTCTL_TIMEOUT`     | `300`                             | Таймаут в секундах (опционально)   |
 
 ### Вариант Б: Флаг --env-file

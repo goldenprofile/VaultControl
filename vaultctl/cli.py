@@ -9,7 +9,13 @@ from pathlib import Path
 
 from .config import VaultNotFoundError, load_env, resolve_timeout, resolve_vault_path
 from .console import flush_input
-from .runner import AGENT_INPUT_MODES, AgentNotFoundError, AgentTimeoutError, run_task
+from .runner import (
+    AGENT_INPUT_MODES,
+    DEFAULT_AGENT_CMD,
+    AgentNotFoundError,
+    AgentTimeoutError,
+    run_task,
+)
 from .taskinput import TaskInputError, resolve_task
 
 EXIT_CONFIG_ERROR = 1
@@ -66,7 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--agent-cmd",
-        help="Команда запуска CLI-агента (по умолчанию: 'claude -p' или VAULTCTL_AGENT_CMD)",
+        help=(
+            "Команда запуска CLI-агента: способ выбрать агента "
+            f"(по умолчанию: '{DEFAULT_AGENT_CMD}', или VAULTCTL_AGENT_CMD)"
+        ),
     )
     parser.add_argument(
         "--agent-input",
@@ -87,7 +96,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stream",
         action="store_true",
-        help="Показывать шаги агента по мере работы (Claude Code, или VAULTCTL_STREAM)",
+        help=(
+            "Показывать шаги агента по мере работы, если формат его потока "
+            "событий известен (или VAULTCTL_STREAM)"
+        ),
     )
     parser.add_argument(
         "-q",
