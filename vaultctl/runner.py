@@ -4,23 +4,29 @@ from __future__ import annotations
 
 import os
 import queue
+import re
 import shlex
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
+from shutil import which
 from typing import IO, NoReturn
 
 from .progress import (
-    CLAUDE_STREAM_FLAGS,
     StreamRenderer,
+    agent_name,
     glyphs_for,
     print_status,
+    stream_flags,
     supports_stream,
 )
 
-DEFAULT_AGENT_CMD = "claude -p"
+#: Единственное место в коде, где зашит конкретный агент: страховочный дефолт,
+#: если не заданы ни --agent-cmd, ни VAULTCTL_AGENT_CMD. Выбор агента — через
+#: переменную окружения или аргумент, здесь только fallback.
+DEFAULT_AGENT_CMD = "pi -p"
 
 #: Способы доставки задачи агенту.
 AGENT_INPUT_MODES = ("auto", "arg", "stdin")
@@ -33,6 +39,16 @@ ARG_LIMIT_POSIX = 120000
 
 class AgentNotFoundError(RuntimeError):
     """Не удалось запустить команду CLI-агента."""
+
+
+#: Суффиксы пакетных файлов: CreateProcess на Windows их не запускает,
+#: в отличие от .exe/.com.
+BATCH_SUFFIXES = {".cmd", ".bat"}
+
+#: npm-шима содержит цель в кавычках: "%dp0%\node_modules\...\cli.js",
+#: где %dp0% (или %~dp0%) — каталог самой шимы.
+_NODE_SCRIPT_RE = re.compile(r'"([^"]+\.js)"')
+_SHIM_DIR_VARS = ("%~dp0%", "%dp0%")
 
 
 class AgentTimeoutError(RuntimeError):
@@ -62,6 +78,75 @@ def build_command(task: str, agent_cmd: str | None = None) -> list[str]:
 def arg_limit() -> int:
     """Предел длины командной строки для текущей платформы."""
     return ARG_LIMIT_WINDOWS if sys.platform == "win32" else ARG_LIMIT_POSIX
+
+
+def resolve_agent_executable(command: list[str]) -> list[str]:
+    """Превращает имя агента в команду, которую запустит subprocess.
+
+    На Windows npm ставит CLI-агентов .cmd-шимами, а CreateProcess умеет
+    запускать только .exe: отсюда «pi есть в PATH, но vaultctl его не находит».
+    Шима — обёртка над ``node <js>``, поэтому путь к скрипту вытаскивается
+    из неё, и агент запускается через node напрямую — минуя cmd.exe, чей
+    парсер портит произвольный текст задачи (раскрывает %ПЕРЕМЕННЫЕ%,
+    путается в кавычках).
+    """
+    if sys.platform != "win32":
+        return command
+    resolved = which(command[0])
+    if resolved is None:
+        return command  # не найден вовсе — пусть падает с обычной ошибкой
+    if Path(resolved).suffix.lower() not in BATCH_SUFFIXES:
+        return [resolved, *command[1:]]
+    script = _node_script_from_shim(resolved)
+    if script is None:
+        return command  # незнакомая шима — диагностика в _not_found_error
+    node = which("node")
+    if node is None:
+        raise AgentNotFoundError(
+            f"«{command[0]}» — .cmd-шима npm: для запуска нужен node в PATH"
+        )
+    return [node, script, *command[1:]]
+
+
+def _node_script_from_shim(shim: str) -> str | None:
+    """Вытаскивает из .cmd-шимы npm путь к js-файлу агента (или None)."""
+    try:
+        text = Path(shim).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    base = str(Path(shim).resolve().parent)
+    for match in _NODE_SCRIPT_RE.finditer(text):
+        script = match.group(1)
+        for var in _SHIM_DIR_VARS:
+            if var in script:
+                script = script.replace(var, base + "\\")
+                break
+        else:
+            continue
+        candidate = os.path.normpath(script)
+        if "node_modules" in candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _not_found_error(command: list[str]) -> AgentNotFoundError:
+    """Диагностика отказа запуска агента с подсказкой по месту."""
+    hint = (
+        "проверьте --agent-cmd или VAULTCTL_AGENT_CMD (путь с пробелами "
+        "и обратными слэшами нужно взять в кавычки)"
+    )
+    if sys.platform == "win32":
+        resolved = which(command[0])
+        if (
+            resolved
+            and Path(resolved).suffix.lower() in BATCH_SUFFIXES
+            and _node_script_from_shim(resolved) is None
+        ):
+            hint += (
+                f"; «{resolved}» — .cmd-шима npm, которую не удалось "
+                'разобрать: задайте VAULTCTL_AGENT_CMD как "node <js-файл агента>"'
+            )
+    return AgentNotFoundError(f"CLI-агент «{command[0]}» не найден — {hint}")
 
 
 def resolve_agent_input(mode: str, parts: list[str], task: str) -> str:
@@ -94,9 +179,9 @@ def run_task(
     status_stream: IO[str] | None = None,
     output_stream: IO[str] | None = None,
 ) -> int:
-    """Передаёт задачу CLI-агенту (Claude Code и т.п.), с рабочей директорией и
-    OBSIDIAN_VAULT_PATH выставленными на vault — активацию навыка obsidian
-    выполняет сам агент.
+    """Передаёт задачу CLI-агенту с рабочей директорией и OBSIDIAN_VAULT_PATH,
+    выставленными на vault — активацию навыка obsidian выполняет сам агент.
+    Агент задаётся --agent-cmd или VAULTCTL_AGENT_CMD.
     """
     status_stream = status_stream if status_stream is not None else sys.stderr
     output_stream = output_stream if output_stream is not None else sys.stdout
@@ -108,8 +193,8 @@ def run_task(
     if stream and not streaming and not quiet:
         marks = glyphs_for(status_stream)
         print(
-            f"{marks['fail']} формат потока событий известен только для Claude Code — "
-            f"вывод «{parts[0]}» идёт как есть",
+            f"{marks['fail']} формат потока событий агента «{parts[0]}» неизвестен — "
+            f"вывод идёт как есть",
             file=status_stream,
         )
 
@@ -123,24 +208,29 @@ def run_task(
     env = {**os.environ, "OBSIDIAN_VAULT_PATH": str(vault_path)}
     stdin_text = task if channel == "stdin" else None
     try:
+        launch = resolve_agent_executable(command)
         if streaming:
             return _run_streaming(
-                command, vault_path, env, timeout, stdin_text, output_stream
+                launch,
+                vault_path,
+                env,
+                timeout,
+                stdin_text,
+                output_stream,
+                agent=agent_name(parts),
             )
-        return _run_plain(command, vault_path, env, timeout, stdin_text)
+        return _run_plain(launch, vault_path, env, timeout, stdin_text)
     except FileNotFoundError as exc:
-        raise AgentNotFoundError(
-            f"CLI-агент «{command[0]}» не найден — проверьте --agent-cmd "
-            f"или VAULTCTL_AGENT_CMD (путь с пробелами и обратными слэшами "
-            f"нужно взять в кавычки)"
-        ) from exc
+        raise _not_found_error(command) from exc
 
 
 def _with_stream_flags(parts: list[str]) -> list[str]:
     """Добавляет агенту флаги потока событий, не трогая уже заданные вручную."""
-    if "--output-format" in parts:
+    flags = stream_flags(parts) or ()
+    if not flags or flags[0] in parts:
+        # Своё --output-format/--mode пользователь уже выбрал — не спорим.
         return parts
-    flags = [flag for flag in CLAUDE_STREAM_FLAGS if flag not in parts]
+    flags = [flag for flag in flags if flag not in parts]
     # Флаги идут сразу после имени команды: последним аргументом должна
     # остаться задача, а перед ней — флаг вроде -p, ожидающий её значением.
     return [parts[0], *flags, *parts[1:]]
@@ -178,8 +268,12 @@ def _run_streaming(
     timeout: float | None,
     stdin_text: str | None,
     output_stream: IO[str],
+    agent: str = "claude",
 ) -> int:
-    """Запускает агента и показывает его шаги по мере поступления."""
+    """Запускает агента и показывает его шаги по мере поступления.
+
+    ``agent`` — имя агента, выбирающее формат разбора потока событий.
+    """
     # Потоки бинарные: кодировку задаём сами, а не отдаём на откуп локали, и
     # не даём Windows подменить \n на \r\n в задаче, уходящей агенту.
     process = subprocess.Popen(
@@ -197,7 +291,7 @@ def _run_streaming(
             target=_feed_stdin, args=(process, stdin_text), daemon=True
         ).start()
 
-    renderer = StreamRenderer(output_stream, vault_path)
+    renderer = StreamRenderer(output_stream, vault_path, agent=agent)
     lines: queue.Queue[str | None] = queue.Queue()
     reader = threading.Thread(target=_read_lines, args=(process, lines), daemon=True)
     reader.start()
