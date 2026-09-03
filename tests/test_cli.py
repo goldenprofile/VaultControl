@@ -4,7 +4,7 @@ import sys
 import pytest
 
 from vaultctl import cli, runner
-from vaultctl.cli import EXIT_CONFIG_ERROR, main
+from vaultctl.cli import EXIT_CONFIG_ERROR, EXIT_INTERRUPTED, main
 
 POST = "Нейродайджест (#128)\n\n- GLM 5.3 Flash — $0,15/$0,5 за миллион токенов."
 
@@ -130,6 +130,22 @@ def test_main_reports_unknown_vault(tmp_path, monkeypatch):
 
     assert main(["--quiet", "задача"]) == EXIT_CONFIG_ERROR
     assert "несуществующую" in stderr.getvalue()
+
+
+def test_main_reports_interrupted_run(vault, agent, monkeypatch):
+    """Ctrl+C во время работы агента — не traceback, а код 130."""
+    command, _ = agent
+    stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", stderr)
+    monkeypatch.setattr(sys, "stdin", FakeTty())
+
+    def interrupted(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli, "run_task", interrupted)
+
+    assert main(["--quiet", "--agent-cmd", command, "задача"]) == EXIT_INTERRUPTED
+    assert "Прервано" in stderr.getvalue()
 
 
 def test_main_flushes_terminal_input(vault, agent, monkeypatch):

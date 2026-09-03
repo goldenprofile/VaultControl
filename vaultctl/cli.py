@@ -21,6 +21,7 @@ from .taskinput import TaskInputError, resolve_task
 EXIT_CONFIG_ERROR = 1
 EXIT_TIMEOUT = 124
 EXIT_AGENT_NOT_FOUND = 127
+EXIT_INTERRUPTED = 130
 
 TRUTHY = {"1", "true", "yes", "on"}
 
@@ -177,6 +178,11 @@ def main(argv: list[str] | None = None) -> int:
     except AgentTimeoutError as exc:
         print(f"Ошибка: {exc}", file=sys.stderr)
         return EXIT_TIMEOUT
+    except KeyboardInterrupt:
+        # Ctrl+C во время работы агента: ребёнок получает тот же Ctrl+C
+        # (общая консоль) и умирает сам — прибивать нечего.
+        print("Прервано.", file=sys.stderr)
+        return EXIT_INTERRUPTED
     finally:
         if not args.keep_input:
             flush_input()
