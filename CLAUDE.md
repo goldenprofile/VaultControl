@@ -73,6 +73,8 @@ vaultctl **не содержит** сам навык внутри себя ка�
 
 На Windows npm-агенты (pi) — это `.cmd`-шимы, которые subprocess запустить не может (CreateProcess исполняет только `.exe`; у Claude Code — нативный бинарник, поэтому он работал «просто так»). `runner.resolve_agent_executable` сам вытаскивает из шимы путь к js-файлу и запускает агента через node — минуя cmd.exe, чей парсер портит произвольный текст (%ПЕРЕМЕННЫЕ%, кавычки). Смотри [ADR-0004](docs/adr/0004-launch-npm-cmd-shims-through-node.md).
 
+Прогоны через pi сопровождаются расширением `vlt-bridge` (источник — `integrations/pi/vlt-bridge.ts`, ставится в `~/.pi/agent/extensions/`): runner помечает прогон env-маркером `VAULTCTL_RUN=1`, по нему расширение инжектит гарантию чтения навыка obsidian и блокирует записи вне vault и опасные shell-команды. Вне vlt-прогонов оно инертно. Меняя его, перекладывай копию в `~/.pi/agent/extensions/` — pi грузит TS напрямую. Смотри [ADR-0005](docs/adr/0005-vlt-bridge-extension-for-deterministic-runs.md).
+
 ## Git
 
 - **Conventional Commits**: `<type>(<scope>): <description>`. Типы: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `build`, `perf`, `ci`.
