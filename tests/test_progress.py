@@ -25,9 +25,9 @@ class Console(io.StringIO):
         return self._encoding
 
 
-def render(*events: dict, vault_path: Path | None = None) -> str:
+def render(*events: dict, vault_path: Path | None = None, agent: str = "claude") -> str:
     stream = Console()
-    renderer = StreamRenderer(stream, vault_path)
+    renderer = StreamRenderer(stream, vault_path, agent=agent)
     for event in events:
         renderer.feed(json.dumps(event) + "\n")
     return stream.getvalue()
@@ -46,9 +46,11 @@ def test_describe_task_counts_lines():
     assert describe_task("первая\nвторая") == "13 символов, 2 строк"
 
 
-def test_supports_stream_recognizes_claude():
+def test_supports_stream_recognizes_claude_and_pi():
     assert supports_stream(["claude", "-p"])
     assert supports_stream([r"C:\bin\claude.exe", "-p"])
+    assert supports_stream(["pi", "-p"])
+    assert supports_stream([r"C:\bin\pi.exe", "-p"])
     assert not supports_stream(["codex", "exec"])
     assert not supports_stream([])
 
@@ -57,12 +59,12 @@ def test_print_status_shows_vault_command_and_size():
     stream = Console()
 
     print_status(
-        stream, Path("/vault"), ["claude", "-p"], "задача", agent_input="arg"
+        stream, Path("/vault"), ["dummy-agent", "-p"], "задача", agent_input="arg"
     )
 
     output = stream.getvalue()
     assert "vault" in output
-    assert "claude -p" in output
+    assert "dummy-agent -p" in output
     assert "6 символов" in output
     assert "аргумент" in output
 
@@ -71,7 +73,7 @@ def test_print_status_keeps_task_text_out_of_command_line():
     stream = Console()
     post = "Нейродайджест\n" * 40
 
-    print_status(stream, Path("/vault"), ["claude", "-p"], post, agent_input="arg")
+    print_status(stream, Path("/vault"), ["dummy-agent", "-p"], post, agent_input="arg")
 
     assert "Нейродайджест" not in stream.getvalue()
 
@@ -79,7 +81,9 @@ def test_print_status_keeps_task_text_out_of_command_line():
 def test_status_marks_stdin_channel():
     stream = Console()
 
-    print_status(stream, Path("/vault"), ["claude", "-p"], "задача", agent_input="stdin")
+    print_status(
+        stream, Path("/vault"), ["dummy-agent", "-p"], "задача", agent_input="stdin"
+    )
 
     assert "stdin" in stream.getvalue()
 
@@ -203,3 +207,144 @@ def test_renderer_prints_result_that_differs_from_last_reply():
 
     assert "сохраняю" in output
     assert "Заметка сохранена" in output
+
+
+# ----------------------------------------------------------------------
+# Поток pi (--mode json)
+# ----------------------------------------------------------------------
+
+
+def test_pi_renderer_shows_run_and_tool_calls():
+    output = render(
+        {"type": "session", "version": 3, "id": "s", "cwd": "/v"},
+        {
+            "type": "tool_execution_start",
+            "toolCallId": "1",
+            "toolName": "read",
+            "args": {"path": "заметка.md"},
+        },
+        agent="pi",
+    )
+
+    assert "агент запущен" in output
+    assert "read(заметка.md)" in output
+
+
+def test_pi_renderer_names_the_skill_the_agent_picked_up():
+    output = render(
+        {
+            "type": "tool_execution_start",
+            "toolCallId": "1",
+            "toolName": "skill",
+            "args": {"skill": "obsidian"},
+        },
+        agent="pi",
+    )
+
+    assert "skill(obsidian)" in output
+
+
+def test_pi_renderer_skips_thinking_and_toolcall_blocks():
+    output = render(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "рассуждаю"},
+                    {
+                        "type": "toolCall",
+                        "id": "1",
+                        "name": "bash",
+                        "arguments": {"command": "ls"},
+                    },
+                    {"type": "text", "text": "Готово: заметка сохранена"},
+                ],
+            },
+        },
+        agent="pi",
+    )
+
+    assert "рассуждаю" not in output
+    assert "bash" not in output
+    assert "заметка сохранена" in output
+
+
+def test_pi_renderer_reports_tool_error():
+    output = render(
+        {
+            "type": "tool_execution_end",
+            "toolCallId": "1",
+            "toolName": "read",
+            "result": {"content": [{"type": "text", "text": "нет доступа"}]},
+            "isError": True,
+        },
+        agent="pi",
+    )
+
+    assert "ошибка инструмента" in output
+    assert "нет доступа" in output
+
+
+def test_pi_renderer_ignores_successful_tool_results():
+    output = render(
+        {
+            "type": "tool_execution_end",
+            "toolCallId": "1",
+            "toolName": "read",
+            "result": {"content": [{"type": "text", "text": "ок"}]},
+            "isError": False,
+        },
+        agent="pi",
+    )
+
+    assert output == ""
+
+
+def test_pi_renderer_finishes_with_model_and_cost():
+    output = render(
+        {
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [],
+                "model": "glm-5.3-flash",
+                "usage": {"cost": {"total": 0.5}},
+                "stopReason": "stop",
+            },
+        },
+        {"type": "agent_end", "messages": []},
+        agent="pi",
+    )
+
+    assert "готово" in output
+    assert "glm-5.3-flash" in output
+    assert "$0.50" in output
+
+
+def test_pi_renderer_marks_error_stop():
+    output = render(
+        {
+            "type": "message_end",
+            "message": {"role": "assistant", "content": [], "stopReason": "error"},
+        },
+        {"type": "agent_end", "messages": []},
+        agent="pi",
+    )
+
+    assert "ошибкой" in output
+
+
+def test_pi_renderer_ignores_user_messages_and_deltas():
+    output = render(
+        {
+            "type": "message_end",
+            "message": {"role": "user", "content": [{"type": "text", "text": "задача"}]},
+        },
+        {"type": "message_update", "assistantMessageEvent": {"type": "text_delta"}},
+        {"type": "turn_start"},
+        {"type": "agent_settled"},
+        agent="pi",
+    )
+
+    assert output == ""
