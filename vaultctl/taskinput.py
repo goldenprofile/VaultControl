@@ -97,8 +97,24 @@ def read_task_file(path: Path) -> str:
 
 
 def read_stream(stream: IO[str]) -> str:
-    """Читает текст задачи из потока (пайп или интерактивный ввод) до EOF."""
+    """Читает текст задачи из потока (интерактивный ввод) до EOF."""
     return _normalize(stream.read())
+
+
+def _read_pipe(stream: IO[str]) -> str:
+    """Читает пайп байтами и декодирует как UTF-8.
+
+    В текстовом режиме Python на Windows декодирует пайп в локальной
+    кодировке (на русской системе — cp1251), и UTF-8-текст из
+    ``echo "задача" | vlt`` доезжает до агента задвоенно закодированным.
+    Интерактивный ввод сюда не попадает: его текстовый слой консоли читает
+    через Unicode API, минуя кодировку, поэтому ему текстовый режим правилен.
+    """
+    binary = getattr(stream, "buffer", None)
+    raw = binary.read() if binary is not None else stream.read()
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    return _normalize(raw)
 
 
 def _interactive_hint() -> str:
@@ -178,7 +194,7 @@ def resolve_task(
     elif task_file is not None:
         body = read_task_file(task_file)
     elif use_stdin or piped:
-        body = read_stream(stdin)
+        body = _read_pipe(stdin) if piped else read_stream(stdin)
         if not body and not prefix:
             raise TaskInputError("задача пуста: stdin не содержит текста")
     elif prefix:

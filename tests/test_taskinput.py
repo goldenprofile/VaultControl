@@ -45,6 +45,25 @@ def test_resolve_task_reads_piped_stdin_without_flag():
     assert task == f"clip:\n\n{POST}"
 
 
+class FakePiped(io.StringIO):
+    """Пайп как его видит реальный stdin: текстовый слой с .buffer внутри."""
+
+    def __init__(self, raw: bytes) -> None:
+        super().__init__()
+        self.buffer = io.BytesIO(raw)
+
+    def isatty(self) -> bool:
+        return False
+
+
+def test_resolve_task_reads_piped_stdin_as_utf8_bytes():
+    piped = FakePiped(POST.encode("utf-8"))
+
+    task = resolve_task([], stdin=piped)
+
+    assert task == POST
+
+
 def test_resolve_task_keeps_dollar_and_newlines_intact():
     task = resolve_task([], stdin=io.StringIO(POST))
     assert "$0,15/$0,5" in task
