@@ -77,7 +77,9 @@ NameRegister: Добавить фильтр по цене в каталог
 
 ## Документация
 
+- [docs/guide.md](docs/guide.md) — гайд: как формулировать задачи, что можно просить, от клиппинга до творческих сценариев
 - [docs/usage.md](docs/usage.md) — справочник: источники текста задачи, переменные окружения, выбор агента, опции, коды возврата
+- [docs/obsidian-skill-audit.md](docs/obsidian-skill-audit.md) — аудит самодостаточности навыка obsidian
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как это устроено
 - [docs/global-install.md](docs/global-install.md) — установка `vlt` глобальной командой
 - [docs/adr/](docs/adr/) — решения по архитектуре с обоснованием
@@ -104,7 +106,9 @@ vaultctl/
 ├── .env.example            # шаблон переменных окружения
 ├── docs/
 │   ├── ARCHITECTURE.md     # как это устроено
+│   ├── guide.md            # гайд по формулировкам задач
 │   ├── usage.md            # справочник по использованию
+│   ├── obsidian-skill-audit.md # аудит навыка obsidian
 │   ├── adr/                # решения по архитектуре: контекст, альтернативы, последствия
 │   └── global-install.md   # установка vlt как глобальной команды
 ├── integrations/
