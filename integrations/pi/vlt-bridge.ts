@@ -79,6 +79,11 @@ function detectOperation(prompt: string): string {
 	const trimmed = prompt.trimStart();
 	if (/^clip\b/i.test(trimmed)) return "клиппинг URL или статьи";
 	if (/^NameRegister\b/i.test(trimmed)) return "NameRegister";
+	if (/^task\b/i.test(trimmed))
+		return (
+			"запись проектной задачи: сформулировать и записать задачу по навыку; " +
+			"саму описанную работу не выполнять"
+		);
 	return "общая задача по vault";
 }
 
