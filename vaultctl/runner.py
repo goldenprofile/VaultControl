@@ -205,7 +205,14 @@ def run_task(
     if not quiet:
         print_status(status_stream, vault_path, parts, task, agent_input=channel)
 
-    env = {**os.environ, "OBSIDIAN_VAULT_PATH": str(vault_path)}
+    # VAULTCTL_RUN — маркер для расширения pi (integrations/pi/vlt-bridge.ts):
+    # в vlt-прогонах оно включает детерминированную активацию навыка и guardrails,
+    # в обычных сессиях pi остаётся инертным.
+    env = {
+        **os.environ,
+        "OBSIDIAN_VAULT_PATH": str(vault_path),
+        "VAULTCTL_RUN": "1",
+    }
     stdin_text = task if channel == "stdin" else None
     try:
         launch = resolve_agent_executable(command)

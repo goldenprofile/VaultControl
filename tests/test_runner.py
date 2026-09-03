@@ -66,7 +66,8 @@ def test_run_task_runs_agent_in_vault_with_env(tmp_path):
     script.write_text(
         "import os, pathlib, sys\n"
         "pathlib.Path(sys.argv[1]).write_text(\n"
-        "    os.getcwd() + '\\n' + os.environ['OBSIDIAN_VAULT_PATH'] + '\\n' + sys.argv[2],\n"
+        "    os.getcwd() + '\\n' + os.environ['OBSIDIAN_VAULT_PATH'] + '\\n'\n"
+        "    + os.environ['VAULTCTL_RUN'] + '\\n' + sys.argv[2],\n"
         "    encoding='utf-8',\n"
         ")\n",
         encoding="utf-8",
@@ -76,10 +77,11 @@ def test_run_task_runs_agent_in_vault_with_env(tmp_path):
         "сохрани ссылку", vault, quoted(sys.executable, script, out), quiet=True
     )
 
-    cwd, env_vault, task = out.read_text(encoding="utf-8").splitlines()
+    cwd, env_vault, run_marker, task = out.read_text(encoding="utf-8").splitlines()
     assert code == 0
     assert cwd == str(vault)
     assert env_vault == str(vault)
+    assert run_marker == "1"
     assert task == "сохрани ссылку"
 
 
