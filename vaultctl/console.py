@@ -19,6 +19,23 @@ from typing import IO
 STD_INPUT_HANDLE = 0xFFFFFFF6
 
 
+def safe_print(text: str, stream: IO[str] | None = None) -> None:
+    """print, переживающий символы вне кодировки потока.
+
+    Текст от агента может содержать эмодзи, которых нет в cp1251 обычной
+    Windows-консоли — обычный print уронит прогон на показе результата.
+    Непредставимые символы заменяются на ``?``.
+    """
+    stream = stream if stream is not None else sys.stdout
+    encoding = getattr(stream, "encoding", None)
+    if encoding:
+        try:
+            text.encode(encoding)
+        except UnicodeEncodeError:
+            text = text.encode(encoding, errors="replace").decode(encoding)
+    print(text, file=stream)
+
+
 def flush_input(stream: IO[str] | None = None) -> bool:
     """Сбрасывает непрочитанный ввод терминала.
 

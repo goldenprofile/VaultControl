@@ -178,6 +178,7 @@ def run_task(
     quiet: bool = False,
     status_stream: IO[str] | None = None,
     output_stream: IO[str] | None = None,
+    result_out: dict | None = None,
 ) -> int:
     """Передаёт задачу CLI-агенту с рабочей директорией и OBSIDIAN_VAULT_PATH,
     выставленными на vault — активацию навыка obsidian выполняет сам агент.
@@ -225,6 +226,7 @@ def run_task(
                 stdin_text,
                 output_stream,
                 agent=agent_name(parts),
+                result_out=result_out,
             )
         return _run_plain(launch, vault_path, env, timeout, stdin_text)
     except FileNotFoundError as exc:
@@ -276,10 +278,13 @@ def _run_streaming(
     stdin_text: str | None,
     output_stream: IO[str],
     agent: str = "claude",
+    result_out: dict | None = None,
 ) -> int:
     """Запускает агента и показывает его шаги по мере поступления.
 
-    ``agent`` — имя агента, выбирающее формат разбора потока событий.
+    ``agent`` — имя агента, выбирающее формат разбора потока событий;
+    ``result_out`` — куда положить финальный ответ агента, если он был
+    в потоке (для очереди задач).
     """
     # Потоки бинарные: кодировку задаём сами, а не отдаём на откуп локали, и
     # не даём Windows подменить \n на \r\n в задаче, уходящей агенту.
@@ -318,9 +323,12 @@ def _run_streaming(
 
     remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
     try:
-        return process.wait(timeout=remaining)
+        code = process.wait(timeout=remaining)
     except subprocess.TimeoutExpired:
         _timeout(process, timeout)
+    if result_out is not None:
+        result_out["text"] = renderer.final_text
+    return code
 
 
 def _feed_stdin(process: subprocess.Popen, text: str) -> None:

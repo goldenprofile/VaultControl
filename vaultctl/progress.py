@@ -176,6 +176,8 @@ class StreamRenderer:
         self._pi_model: str | None = None
         self._pi_cost: float | None = None
         self._pi_failed = False
+        # Финальный ответ агента (для очереди: result задачи).
+        self.final_text: str | None = None
 
     def feed(self, line: str) -> None:
         """Обрабатывает одну строку вывода агента."""
@@ -259,6 +261,10 @@ class StreamRenderer:
         text = event.get("result")
         if isinstance(text, str) and text.strip() and text.strip() != self._last_text:
             self._write(text.strip())
+        if isinstance(text, str) and text.strip():
+            self.final_text = text.strip()
+        elif self._last_text:
+            self.final_text = self._last_text
 
 
     # ------------------------------------------------------------------
@@ -296,6 +302,7 @@ class StreamRenderer:
                 text = block.get("text")
                 if isinstance(text, str) and text.strip():
                     self._write(f"  {_shorten(text, MAX_TEXT_LEN)}")
+                    self.final_text = text.strip()
         model = message.get("model")
         if isinstance(model, str) and model:
             self._pi_model = model

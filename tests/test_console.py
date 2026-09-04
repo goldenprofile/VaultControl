@@ -2,7 +2,7 @@ import io
 import sys
 
 from vaultctl import console
-from vaultctl.console import flush_input
+from vaultctl.console import flush_input, safe_print
 
 
 class FakeTty(io.StringIO):
@@ -41,3 +41,14 @@ def test_flush_input_on_closed_stream():
     stream = io.StringIO()
     stream.close()
     assert flush_input(stream) is False
+
+
+def test_safe_print_replaces_unencodable_characters():
+    class Cp1251(io.StringIO):
+        encoding = "cp1251"
+
+    stream = Cp1251()
+
+    safe_print("💡 готово", stream)
+
+    assert stream.getvalue() == "? готово\n"
